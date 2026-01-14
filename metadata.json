@@ -1,0 +1,5 @@
+{
+  "name": "Curated News for Morning",
+  "description": "A three-column RSS feed reader with real-time clock, categorization, and customizable feed sources.",
+  "requestFramePermissions": []
+}
