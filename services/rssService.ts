@@ -1,42 +1,43 @@
 import { Article, FeedSource } from '../types';
 
-export const fetchFeed = async (feedSource: FeedSource): Promise<Article[]> => {
-  let xmlText: string | null = null;
-
-  // List of proxies to try in order.
-  // We use a fallback strategy because public proxies can be flaky or blocked.
+// Exported helper to be used by other services (like weather)
+export const fetchTextWithProxy = async (url: string): Promise<string | null> => {
   const fetchStrategies = [
-    // Strategy 1: AllOrigins (JSON wrapped) - usually handles CORS headers correctly
+    // Strategy 1: AllOrigins (JSON wrapped)
     async () => {
-      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(feedSource.url)}`);
+      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
       if (!res.ok) throw new Error(`AllOrigins status: ${res.status}`);
       const data = await res.json();
       return data.contents;
     },
     // Strategy 2: CorsProxy.io (Direct proxy)
     async () => {
-      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(feedSource.url)}`);
+      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
       if (!res.ok) throw new Error(`CorsProxy status: ${res.status}`);
       return await res.text();
     },
-    // Strategy 3: AllOrigins Raw (Fallback for different content types)
+    // Strategy 3: AllOrigins Raw
     async () => {
-       const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(feedSource.url)}`);
+       const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
        if (!res.ok) throw new Error(`AllOrigins Raw status: ${res.status}`);
        return await res.text();
     }
   ];
 
-  // Try each strategy until one works
   for (const strategy of fetchStrategies) {
     try {
-      xmlText = await strategy();
-      if (xmlText && xmlText.trim().length > 0) break; // Success
+      const result = await strategy();
+      if (result && result.trim().length > 0) return result;
     } catch (e) {
-      console.warn(`Fetch strategy failed for ${feedSource.url}:`, e);
-      // Continue to next strategy
+      console.warn(`Fetch strategy failed for ${url}:`, e);
     }
   }
+  
+  return null;
+};
+
+export const fetchFeed = async (feedSource: FeedSource): Promise<Article[]> => {
+  const xmlText = await fetchTextWithProxy(feedSource.url);
 
   if (!xmlText) {
     console.error(`All fetch strategies failed for ${feedSource.url}`);
@@ -63,8 +64,6 @@ export const fetchFeed = async (feedSource: FeedSource): Promise<Article[]> => {
       
       // Handle description/content
       let description = item.querySelector('description')?.textContent || '';
-      // Try to find content:encoded. Note: querySelector with namespaces can be tricky in HTML DOMParser.
-      // We check multiple ways to be safe.
       const contentEncoded = item.getElementsByTagNameNS('*', 'encoded')[0]?.textContent 
                           || item.querySelector('content\\:encoded')?.textContent;
       
@@ -76,8 +75,6 @@ export const fetchFeed = async (feedSource: FeedSource): Promise<Article[]> => {
       // Attempt to find an image
       let imageUrl: string | undefined;
       
-      // 1. Check media:content (namespace aware)
-      // Some feeds use <media:content url="..."> or <media:group><media:content ...>
       const mediaElements = item.getElementsByTagNameNS('*', 'content');
       if (mediaElements.length > 0) {
           for(let i=0; i<mediaElements.length; i++) {
@@ -86,7 +83,6 @@ export const fetchFeed = async (feedSource: FeedSource): Promise<Article[]> => {
               const type = el.getAttribute('type');
               const medium = el.getAttribute('medium');
               
-              // Basic check if it looks like an image
               if (url && (type?.startsWith('image') || medium === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i))) {
                   imageUrl = url;
                   break;
@@ -94,7 +90,6 @@ export const fetchFeed = async (feedSource: FeedSource): Promise<Article[]> => {
           }
       }
       
-      // 2. Check enclosure
       if (!imageUrl) {
         const enclosures = item.querySelectorAll('enclosure');
         for(let i=0; i<enclosures.length; i++) {
@@ -107,7 +102,6 @@ export const fetchFeed = async (feedSource: FeedSource): Promise<Article[]> => {
         }
       }
 
-      // 3. Regex on description/content (Last resort)
       if (!imageUrl) {
         const imgRegex = /<img[^>]+src="([^">]+)"/;
         const match = description.match(imgRegex) || (content ? content.match(imgRegex) : null);
@@ -116,13 +110,10 @@ export const fetchFeed = async (feedSource: FeedSource): Promise<Article[]> => {
         }
       }
       
-      // Fix relative URLs in images (rare in RSS but happens)
       if (imageUrl && !imageUrl.startsWith('http')) {
           try {
-              // Try to resolve against the item link or feed url
               imageUrl = new URL(imageUrl, link || feedSource.url).href;
           } catch (e) {
-              // ignore invalid url construction
           }
       }
 
@@ -137,6 +128,7 @@ export const fetchFeed = async (feedSource: FeedSource): Promise<Article[]> => {
         sourceId: feedSource.id,
         sourceTitle: channelTitle,
         isTurkish: feedSource.isTurkish,
+        category: feedSource.category,
       };
     });
   } catch (error) {

@@ -1,5 +1,6 @@
 import React from 'react';
 import Clock from './Clock';
+import WeatherWidget from './WeatherWidget';
 import { Plus, RefreshCw } from 'lucide-react';
 
 interface SidebarLeftProps {
@@ -10,10 +11,12 @@ interface SidebarLeftProps {
 
 const SidebarLeft: React.FC<SidebarLeftProps> = ({ onAddFeedClick, onRefreshClick, isRefreshing }) => {
   return (
-    <div className="h-full flex flex-col">
-      <div className="mb-6">
+    <div className="h-full flex flex-col gap-4">
+      <div className="flex-shrink-0">
         <Clock />
       </div>
+
+      <WeatherWidget />
       
       <div className="flex-1"></div>
 

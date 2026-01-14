@@ -60,13 +60,14 @@ const App: React.FC = () => {
   }, []); // Run once on mount, then depend on manual refresh or feed changes
 
   // Handlers
-  const handleAddFeed = (url: string, isTurkish: boolean) => {
+  const handleAddFeed = (url: string, category: string, isTurkish: boolean) => {
     const newFeed: FeedSource = {
       id: Math.random().toString(36).substr(2, 9),
       url,
       title: 'New Feed (Loading...)', // Will update title on next fetch or simple parse
       addedAt: new Date(),
-      isTurkish
+      isTurkish,
+      category: category || undefined
     };
     
     // Optimistic add, then reload to get real title and articles
@@ -77,9 +78,6 @@ const App: React.FC = () => {
   const handleDeleteFeed = (id: string) => {
     if (window.confirm('Are you sure you want to remove this feed?')) {
       setFeeds(prev => prev.filter(f => f.id !== id));
-      // Re-fetch/filter logic handled by useEffect on [feeds] if we added it, 
-      // but to be efficient, we might just filter existing articles or reload.
-      // Simpler to just reload to clean up.
       setTimeout(() => loadFeeds(), 100);
     }
   };
@@ -89,6 +87,17 @@ const App: React.FC = () => {
     return articles.filter(article => {
       // Category Filter
       if (selectedCategory === 'TURKISH' && !article.isTurkish) return false;
+      
+      // International typically implies non-Turkish and not specific sports like Basketball (unless we consider RealGM 'International' too)
+      // But usually 'Global' acts as 'Not Local'.
+      // If filtering for BASKETBALL, we only want basketball stuff.
+      if (selectedCategory === 'BASKETBALL') {
+        if (article.category !== 'BASKETBALL') return false;
+      }
+
+      // If filtering for INTERNATIONAL, we want Non-Turkish. 
+      // User might or might not want Basketball here. 
+      // Let's assume International = Everything that is NOT Turkish.
       if (selectedCategory === 'INTERNATIONAL' && article.isTurkish) return false;
 
       // Search Filter
@@ -103,6 +112,13 @@ const App: React.FC = () => {
       return true;
     });
   }, [articles, selectedCategory, searchQuery]);
+
+  const getCategoryButtonClass = (category: Category) => 
+    `px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+      selectedCategory === category 
+      ? 'bg-white text-blue-600 shadow-sm' 
+      : 'text-slate-500 hover:text-slate-700'
+    }`;
 
   return (
     <div className="flex h-screen w-full bg-slate-50 text-slate-900 font-sans">
@@ -131,24 +147,30 @@ const App: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg">
+          <div className="flex items-center bg-slate-100 p-1 rounded-lg overflow-x-auto max-w-full">
              <button 
               onClick={() => setSelectedCategory('ALL')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${selectedCategory === 'ALL' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={getCategoryButtonClass('ALL')}
              >
                All
              </button>
              <button 
               onClick={() => setSelectedCategory('TURKISH')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${selectedCategory === 'TURKISH' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={getCategoryButtonClass('TURKISH')}
              >
                Turkish
              </button>
              <button 
               onClick={() => setSelectedCategory('INTERNATIONAL')}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${selectedCategory === 'INTERNATIONAL' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              className={getCategoryButtonClass('INTERNATIONAL')}
              >
                Global
+             </button>
+             <button 
+              onClick={() => setSelectedCategory('BASKETBALL')}
+              className={getCategoryButtonClass('BASKETBALL')}
+             >
+               Basketball
              </button>
           </div>
         </header>
@@ -174,7 +196,7 @@ const App: React.FC = () => {
             ) : (
               <div className="flex flex-col items-center justify-center h-64 text-slate-400">
                 <Filter className="w-12 h-12 mb-2 opacity-20" />
-                <p>No articles found.</p>
+                <p>No articles found for this category.</p>
               </div>
             )}
           </div>

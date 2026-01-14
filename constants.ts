@@ -30,6 +30,7 @@ export const DEFAULT_FEEDS: Omit<FeedSource, 'addedAt'>[] = [
     url: 'https://basketball.realgm.com/rss/wiretap/0/0.xml',
     title: 'RealGM Basketball',
     isTurkish: false,
+    category: 'BASKETBALL',
   },
   {
     id: 'thehill',
